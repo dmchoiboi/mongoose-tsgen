@@ -130,7 +130,6 @@ function findTypesInFile(sourceFile: SourceFile, modelTypes: ModelTypes) {
       let modelName: string;
       const hasSchemaIdentifier = leftChildren.some(child => {
         if (child.getKind() !== SyntaxKind.Identifier) return false;
-
         modelName = schemaModelMapping[child.getText()];
         if (!modelName) return false;
 
@@ -138,7 +137,6 @@ function findTypesInFile(sourceFile: SourceFile, modelTypes: ModelTypes) {
       });
 
       const hasDotToken = leftChildren.some(child => child.getKind() === SyntaxKind.DotToken);
-
       if (!hasSchemaIdentifier || !hasDotToken) continue;
 
       const hasMethodsIdentifier = leftChildren.some(
@@ -291,8 +289,6 @@ function initModelTypes(sourceFile: SourceFile, filePath: string) {
   });
 
   sourceFile.getVariableDeclarations().forEach(d => {
-    if (!d.hasExportKeyword()) return;
-
     const { modelName, schemaVariableName } = parseModelInitializer(d, isModelNamedImport) ?? {};
     if (!modelName || !schemaVariableName) return;
 
@@ -375,7 +371,16 @@ export const registerUserTs = (basePath: string): (() => void) | null => {
     );
 
   const foundPath = path.join(process.cwd(), files[0]);
-  require("ts-node").register({ transpileOnly: true, project: foundPath });
+  if (process.env.DEBUG) {
+    console.log("tsreader: Registering tsconfig.json with ts-node at path: " + foundPath);
+  }
+  require("ts-node").register({
+    transpileOnly: true,
+    project: foundPath,
+    compilerOptions: {
+      module: "commonjs"
+    }
+  });
 
   // handle path aliases
   const tsConfigString = fs.readFileSync(foundPath, "utf8");
@@ -383,8 +388,16 @@ export const registerUserTs = (basePath: string): (() => void) | null => {
   try {
     const tsConfig = JSON.parse(stripJsonComments(tsConfigString));
     if (tsConfig?.compilerOptions?.paths) {
+      const baseUrl = process.cwd();
+      if (process.env.DEBUG) {
+        console.log(
+          "tsreader: Found paths field in tsconfig.json, registering project with tsconfig-paths using baseUrl " +
+            baseUrl
+        );
+      }
+
       const cleanup = require("tsconfig-paths").register({
-        baseUrl: process.cwd(),
+        baseUrl,
         paths: tsConfig.compilerOptions.paths
       });
 
